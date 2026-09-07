@@ -5,6 +5,7 @@ This repository contains xv6-riscv kernel and user-space implementations of thre
 1. **Peterson's Algorithm** — Software-only mutual exclusion over shared memory
 2. **Producer-Consumer Problem** — Bounded buffer using counting semaphores
 3. **Readers-Writers Problem** — Fair/starvation-free reader-writer synchronization
+4. **Dining Philosophers Problem** (Deadlock-free resource allocation across 5 philosophers)
 
 ---
 
@@ -12,24 +13,22 @@ This repository contains xv6-riscv kernel and user-space implementations of thre
 
 ```text
 xv6-riscv/
-├── Makefile                 # Updated UPROGS to include _peterson, _prodcons, and _readwrite
-├── README.md                # Documentation of design, mechanics, and run instructions
-│
+├── Makefile                # Updated UPROGS to include _peterson, _prodcons, _readwrite, and _dining
+├── README.md               # Documentation of design, mechanics, and run instructions
 ├── kernel/
-│   ├── defs.h               # Kernel prototypes for shm and semaphore syscalls
-│   ├── proc.c               # Shared-memory page inheritance in fork() & cleanup in freeproc()
-│   ├── proc.h               # Extended struct proc with shm_page physical address tracker
-│   ├── syscall.c            # System call lookup table & dispatch handlers
-│   ├── syscall.h            # Syscall numbers: SYS_shm_get, SYS_sem_init,
-│   │                         # SYS_sem_wait, SYS_sem_post
-│   └── sysproc.c             # Implementations of shm_get and semaphore kernel primitives
-│
+│   ├── defs.h              # Kernel prototypes for shm and semaphore syscalls
+│   ├── proc.c              # Shared-memory page inheritance in fork() & cleanup in freeproc()
+│   ├── proc.h              # Extended struct proc with shm_page physical address tracker
+│   ├── syscall.c           # System call lookup table & dispatch handlers
+│   ├── syscall.h           # Syscall definitions for shm and semaphore operations
+│   └── sysproc.c           # Implementations of shm_get and semaphore kernel primitives
 └── user/
-    ├── peterson.c           # Question 1: Peterson's algorithm across 2 processes
-    ├── prodcons.c           # Question 2: Bounded buffer with empty, full, and mutex semaphores
-    ├── readwrite.c          # Question 3: 3 readers and 2 writers with starvation prevention
-    ├── user.h               # User-level function prototypes for all added syscalls
-    └── usys.pl              # Syscall stub generators for entry points
+    ├── peterson.c          # Question 1: Peterson's algorithm across 2 processes
+    ├── prodcons.c          # Question 2: Bounded buffer with empty, full, and mutex semaphores
+    ├── readwrite.c         # Question 3: 3 readers and 2 writers with starvation prevention
+    ├── dining.c            # Question 4: 5 philosophers with asymmetric deadlock avoidance
+    ├── user.h              # User-level function prototypes for all added syscalls
+    └── usys.pl             # Syscall stub generators for entry points
 ```
 
 ---
@@ -117,6 +116,24 @@ Allow concurrent reading with exclusive writing while preventing **writer starva
 
 ---
 
+### Question 4: Dining Philosophers Problem (`dining.c`)
+
+- **Objective**: Coordinate 5 philosopher processes competing for 5 shared forks without encountering deadlocks or starvation.
+
+### Design
+
+  - Each fork (0 to 4) is modeled as a binary semaphore (`sem_init(i, 1)`) implemented in the kernel via `sleep()` and `wakeup()`.
+  - A separate mutex semaphore (`PRINT_LOCK`) synchronizes terminal outputs to prevent interleaved log lines.
+  - Spawns 5 concurrent child processes using `fork()`, each executing 5 consecutive `THINKING -> HUNGRY -> EATING -> THINKING` cycles.
+- **Deadlock Avoidance Strategy (Asymmetric Resource Allocation)**:
+  - **The Deadlock Condition**: If all philosophers pick up their left fork simultaneously in a symmetric design, a circular wait chain ($P_0 \to P_1 \to P_2 \to P_3 \to P_4 \to P_0$) forms, freezing the system.
+  - **The Solution**: Break Coffman's circular wait condition by introducing asymmetry:
+    - **Even philosophers (0, 2, 4)**: Pick up `left_fork` first, then `right_fork`.
+    - **Odd philosophers (1, 3)**: Pick up `right_fork` first, then `left_fork`.
+  - **Why It Works**: Neighboring philosophers compete for the same initial fork rather than chaining dependencies along the ring. At least one philosopher is always guaranteed access to both adjacent forks, ensuring global forward progress without hanging.
+
+  ---
+
 ## 4. Build & Run Instructions
 
 To compile and launch xv6 in QEMU:
@@ -144,6 +161,12 @@ prodcons
 
 ```text
 readwrite
+```
+
+### Question 4: Dining Philosophers
+
+```text
+dining
 ```
 
 To exit QEMU:
